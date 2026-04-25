@@ -2,16 +2,48 @@ aqualeaks-ai/
 │
 ├── frontend/                          # React App
 │   ├── public/
-│   │   └── index.html
+│   │   ├── index.html
+│   │   └── favicon.ico
 │   │
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Map.jsx
-│   │   │   ├── LeakPanel.jsx
-│   │   │   └── LoadingSpinner.jsx
+│   │   │   ├── Layout/
+│   │   │   │   ├── Header.jsx
+│   │   │   │   ├── Header.css
+│   │   │   │   ├── Footer.jsx
+│   │   │   │   └── Footer.css
+│   │   │   │
+│   │   │   ├── Map/
+│   │   │   │   ├── Map.jsx
+│   │   │   │   └── Map.css
+│   │   │   │
+│   │   │   ├── Dashboard/
+│   │   │   │   ├── Statistics.jsx
+│   │   │   │   ├── Statistics.css
+│   │   │   │   ├── AlertsPanel.jsx
+│   │   │   │   └── AlertsPanel.css
+│   │   │   │
+│   │   │   ├── Charts/
+│   │   │   │   ├── LeakTrendChart.jsx
+│   │   │   │   └── LeakTrendChart.css
+│   │   │   │
+│   │   │   ├── Common/
+│   │   │   │   ├── LoadingSpinner.jsx
+│   │   │   │   ├── LoadingSpinner.css
+│   │   │   │   ├── ErrorBoundary.jsx
+│   │   │   │   └── CitySelector.jsx
+│   │   │   │
+│   │   │   └── LeakPanel.jsx
 │   │   │
 │   │   ├── services/
 │   │   │   └── api.js
+│   │   │
+│   │   ├── hooks/
+│   │   │   └── useLeakData.js
+│   │   │
+│   │   ├── utils/
+│   │   │   ├── constants.js
+│   │   │   └── helpers.js
 │   │   │
 │   │   ├── App.js
 │   │   ├── App.css
@@ -20,10 +52,9 @@ aqualeaks-ai/
 │   └── package.json
 │
 ├── backend/                          # Python Flask API
-│   ├── app.py                        # Serverul principal
-│   ├── detector.py                   # Algoritmul de detecție
+│   ├── app.py
+│   ├── detector.py
 │   ├── requirements.txt
-│   └── data/                         # Folder pentru imagini
-│       └── (pozele descărcate aici)
+│   └── data/
 │
 └── README.md
