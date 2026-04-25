@@ -67,7 +67,7 @@ npm start
 ```
 aqualeaks-ai/
 │
-├── frontend/                          # React App
+├── frontend/                 # React App
 │   ├── public/
 │   │   ├── index.html
 │   │   └── favicon.ico
@@ -86,9 +86,7 @@ aqualeaks-ai/
 │   │   │   │
 │   │   │   ├── Dashboard/
 │   │   │   │   ├── Statistics.jsx
-│   │   │   │   ├── Statistics.css
-│   │   │   │   ├── AlertsPanel.jsx
-│   │   │   │   └── AlertsPanel.css
+│   │   │   │   └── Statistics.css
 │   │   │   │
 │   │   │   ├── Charts/
 │   │   │   │   ├── LeakTrendChart.jsx
@@ -97,16 +95,18 @@ aqualeaks-ai/
 │   │   │   ├── Common/
 │   │   │   │   ├── LoadingSpinner.jsx
 │   │   │   │   ├── LoadingSpinner.css
-│   │   │   │   ├── ErrorBoundary.jsx
-│   │   │   │   └── CitySelector.jsx
+│   │   │   │   └── ErrorBoundary.jsx
 │   │   │   │
-│   │   │   └── LeakPanel.jsx
-│   │   │
-│   │   ├── services/
-│   │   │   └── api.js
+│   │   │   ├── AlertsPanel.jsx
+│   │   │   ├── AlertsPanel.css
+│   │   │   ├── LeakPanel.jsx
+│   │   │   └── CitySelector.jsx
 │   │   │
 │   │   ├── hooks/
 │   │   │   └── useLeakData.js
+│   │   │
+│   │   ├── services/
+│   │   │   └── api.js
 │   │   │
 │   │   ├── utils/
 │   │   │   ├── constants.js
@@ -118,7 +118,7 @@ aqualeaks-ai/
 │   │
 │   └── package.json
 │
-├── backend/                          # Python Flask API
+├── backend/                 # Python Flask API
 │   ├── app.py
 │   ├── detector.py
 │   ├── requirements.txt
