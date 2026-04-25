@@ -1,0 +1,20 @@
+.leak-map {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px;
+}
+
+.leak-popup {
+    padding: 5px;
+    min-width: 180px;
+}
+
+.leak-popup strong {
+    color: #0066cc;
+    font-size: 14px;
+}
+
+.leak-popup small {
+    color: #999;
+    font-size: 10px;
+}

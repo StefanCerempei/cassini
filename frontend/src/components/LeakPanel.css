@@ -1,0 +1,85 @@
+.leak-panel {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.leak-panel h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 16px;
+}
+
+.no-leaks {
+    text-align: center;
+    padding: 30px;
+    color: #4caf50;
+    background: #e8f5e9;
+    border-radius: 8px;
+}
+
+.leaks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.leak-item {
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid #ccc;
+}
+
+.leak-item:hover {
+    transform: translateX(5px);
+    background: #e9ecef;
+}
+
+.leak-item.selected {
+    background: #e3f2fd;
+    border-left-color: #0066cc;
+}
+
+.leak-item.high {
+    border-left-color: #ff0000;
+}
+
+.leak-item.medium {
+    border-left-color: #ff8800;
+}
+
+.leak-item.low {
+    border-left-color: #ffcc00;
+}
+
+.leak-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.leak-icon {
+    font-size: 18px;
+}
+
+.leak-severity {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.leak-details {
+    font-size: 12px;
+    color: #666;
+}
+
+.leak-time {
+    font-size: 10px;
+    color: #999;
+    margin-top: 4px;
+}
