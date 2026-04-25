@@ -1,0 +1,11 @@
+.trend-chart {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.trend-chart h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 16px;
+}
