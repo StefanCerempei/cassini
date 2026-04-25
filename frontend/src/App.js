@@ -1,115 +1,199 @@
 import React, { useState, useEffect } from 'react';
-import Header from './components/Layout/Header';
-import Footer from './components/Layout/Footer';
-import Map from './components/Map/Map';
-import LeakPanel from './components/LeakPanel';
-import Statistics from './components/Dashboard/Statistics';
-import AlertsPanel from './components/Dashboard/AlertsPanel';
-import LeakTrendChart from './components/Charts/LeakTrendChart';
-import LoadingSpinner from './components/Common/LoadingSpinner';
-import ErrorBoundary from './components/Common/ErrorBoundary';
-import { fetchLeaksData, fetchHistoricalData } from './services/api';
 import './App.css';
 
 function App() {
-    const [leaks, setLeaks] = useState([]);
-    const [historicalData, setHistoricalData] = useState([]);
+    const [spills, setSpills] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [selectedLeak, setSelectedLeak] = useState(null);
-    const [city, setCity] = useState('București');
     const [lastUpdate, setLastUpdate] = useState(null);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const [error, setError] = useState(null);
+    const [severityFilter, setSeverityFilter] = useState('all');
+    const [activePage, setActivePage] = useState('dashboard');
+    const [isDarkMode, setIsDarkMode] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [activeLayer, setActiveLayer] = useState('ndwi');
+    const [dateRange, setDateRange] = useState('last7');
+    const [cloudCoverage, setCloudCoverage] = useState(30);
 
-    const loadData = async () => {
-        try {
-            setIsRefreshing(true);
-            setError(null);
-
-            const [leaksData, historyData] = await Promise.all([
-                fetchLeaksData(city),
-                fetchHistoricalData(city, 30)
-            ]);
-
-            setLeaks(leaksData.leaks || []);
-            setHistoricalData(historyData || []);
-            setLastUpdate(new Date());
-
-        } catch (err) {
-            console.error('Eroare la încărcare:', err);
-            setError('Nu s-a putut conecta la server. Verificați dacă backend-ul rulează.');
-        } finally {
-            setLoading(false);
-            setIsRefreshing(false);
-        }
+    const naslavceaCoords = {
+        lat: 48.4714,
+        lon: 27.5823,
+        name: "Naslavcea, Republica Moldova",
+        river: "Râul Nistru"
     };
+
+    const generateMockSpills = () => {
+        return [
+            { id: 1, lat: 48.4714, lon: 27.5823, severity: 'high', score: 0.92, area_m2: 1250, type: 'petrol', timestamp: new Date().toISOString(), description: 'Deversare petrol detectată pe Nistru' },
+            { id: 2, lat: 48.4680, lon: 27.5850, severity: 'medium', score: 0.68, area_m2: 580, type: 'petrol', timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), description: 'Pată petrol în aval' },
+            { id: 3, lat: 48.4750, lon: 27.5790, severity: 'low', score: 0.42, area_m2: 230, type: 'petrol', timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), description: 'Urmă de petrol la suprafață' },
+            { id: 4, lat: 48.4650, lon: 27.5880, severity: 'medium', score: 0.71, area_m2: 340, type: 'petrol', timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), description: 'Petrol în derivă' }
+        ];
+    };
+
+    const historicalData = [
+        { date: '01 Apr', spills: 2, area: 450 },
+        { date: '05 Apr', spills: 3, area: 680 },
+        { date: '10 Apr', spills: 1, area: 230 },
+        { date: '15 Apr', spills: 4, area: 890 },
+        { date: '20 Apr', spills: 2, area: 510 },
+        { date: '25 Apr', spills: 3, area: 720 }
+    ];
 
     useEffect(() => {
-        loadData();
-        const interval = setInterval(loadData, 30000);
-        return () => clearInterval(interval);
-    }, [city]);
+        setTimeout(() => {
+            setSpills(generateMockSpills());
+            setLastUpdate(new Date());
+            setLoading(false);
+        }, 1500);
+    }, []);
 
-    if (loading) return <LoadingSpinner />;
+    const filteredSpills = severityFilter === 'all' ? spills : spills.filter(s => s.severity === severityFilter);
+
+    const stats = {
+        total: spills.length,
+        high: spills.filter(s => s.severity === 'high').length,
+        medium: spills.filter(s => s.severity === 'medium').length,
+        low: spills.filter(s => s.severity === 'low').length,
+        totalArea: spills.reduce((sum, s) => sum + s.area_m2, 0),
+        avgConfidence: Math.round(spills.reduce((sum, s) => sum + s.score, 0) / spills.length * 100)
+    };
+
+    const getCopernicusUrl = () => {
+        const layers = { ndwi: '7-NDWI', ndmi: '8-NDMI', truecolor: '1-TRUE-COLOR', falsecolor: '2-FALSE-COLOR' };
+        const getFromTime = () => {
+            const now = new Date();
+            switch(dateRange) {
+                case 'today': return now.toISOString();
+                case 'last3': now.setDate(now.getDate() - 3); return now.toISOString();
+                case 'last7': now.setDate(now.getDate() - 7); return now.toISOString();
+                case 'last30': now.setDate(now.getDate() - 30); return now.toISOString();
+                default: now.setDate(now.getDate() - 7); return now.toISOString();
+            }
+        };
+        return `https://browser.dataspace.copernicus.eu/?zoom=14&lat=${naslavceaCoords.lat}&lng=${naslavceaCoords.lon}&themeId=DEFAULT-THEME&visualizationUrl=U2FsdGVkX19cB3Lb7CbEdR361J6dvKjuG43fANN13y1ERehh0oJ0b7Sjh9sWISNgmy57tW%2BKTGoA8mJWtysQ2gvK%2F11yyLLGUMoiWGBOEE1c2KYM6Gk0ID7kMCDkfShj&datasetId=S2_L2A_CDAS&fromTime=${getFromTime()}&toTime=${new Date().toISOString()}&layerId=${layers[activeLayer]}&demSource3D=MAPZEN&cloudCoverage=${cloudCoverage}`;
+    };
+
+    const navItems = [
+        { id: 'dashboard', icon: '📊', label: 'Dashboard', desc: 'Prezentare generală' },
+        { id: 'map', icon: '🗺️', label: 'Hartă Satelit', desc: 'Monitorizare Copernicus' },
+        { id: 'analytics', icon: '📈', label: 'Analytics', desc: 'Trenduri și statistici' },
+        { id: 'alerts', icon: '⚠️', label: 'Alerts', desc: 'Notificări active' }
+    ];
+
+    if (loading) {
+        return (
+            <div className={`loading-screen ${isDarkMode ? 'dark' : 'light'}`}>
+                <div className="loading-content">
+                    <div className="loading-icon">🛢️</div>
+                    <p>Scanare satelit pentru deversări petrol...</p>
+                    <p className="loading-location">Zona: Naslavcea, Râul Nistru</p>
+                    <div className="loading-progress"><div className="progress-bar"></div></div>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <ErrorBoundary>
-            <div className="app">
-                <Header
-                    onRefresh={loadData}
-                    lastUpdate={lastUpdate}
-                    city={city}
-                    onCityChange={setCity}
-                    isRefreshing={isRefreshing}
-                    totalLeaks={leaks.length}
-                />
+        <div className={`app ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
+            {/* Sidebar */}
+            <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+                <div className="sidebar-header">
+                    <div className="logo"><span>🛢️</span><h2>AquaLeaks<span>AI</span></h2></div>
+                    <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? '◀' : '▶'}</button>
+                </div>
+                <nav className="sidebar-nav">
+                    {navItems.map(item => (
+                        <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => setActivePage(item.id)}>
+                            <span className="nav-icon">{item.icon}</span>
+                            {sidebarOpen && <div className="nav-text"><span className="nav-label">{item.label}</span><span className="nav-desc">{item.desc}</span></div>}
+                        </button>
+                    ))}
+                </nav>
+                <div className="sidebar-footer">
+                    <div className="satellite-status"><div className="status-dot"></div><span>Sentinel-2 Online</span></div>
+                    {sidebarOpen && <div className="sidebar-stats"><div>🛰️ Rezoluție: 10m</div><div>🎯 Precizie: {stats.avgConfidence}%</div></div>}
+                </div>
+            </aside>
 
-                <div className="main-content">
-                    {error && (
-                        <div className="error-banner">
-                            ⚠️ {error}
-                            <button onClick={loadData}>Încearcă din nou</button>
+            {/* Main Content */}
+            <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+                {/* Header */}
+                <header className="main-header">
+                    <div className="header-left"><h1>{navItems.find(i => i.id === activePage)?.label}</h1><p>{navItems.find(i => i.id === activePage)?.desc}</p></div>
+                    <div className="header-right">
+                        <button className="theme-toggle" onClick={() => setIsDarkMode(!isDarkMode)}>{isDarkMode ? '☀️' : '🌙'}</button>
+                        <div className="header-location"><span>📍</span><span>Naslavcea, RM</span></div>
+                        <div className="header-time"><span>🕐</span><span>{lastUpdate?.toLocaleTimeString('ro-RO')}</span></div>
+                    </div>
+                </header>
+
+                {/* Dashboard Page */}
+                {activePage === 'dashboard' && (
+                    <div className="page dashboard-page">
+                        <div className="stats-grid">
+                            <div className="stat-card"><div className="stat-icon">🛢️</div><div className="stat-info"><div className="stat-value">{stats.total}</div><div className="stat-label">Total Deversări</div></div></div>
+                            <div className="stat-card high"><div className="stat-icon">🔴</div><div className="stat-info"><div className="stat-value">{stats.high}</div><div className="stat-label">Urgență Majoră</div></div></div>
+                            <div className="stat-card medium"><div className="stat-icon">🟠</div><div className="stat-info"><div className="stat-value">{stats.medium}</div><div className="stat-label">Risc Mediu</div></div></div>
+                            <div className="stat-card low"><div className="stat-icon">🟡</div><div className="stat-info"><div className="stat-value">{stats.low}</div><div className="stat-label">Risc Scăzut</div></div></div>
+                            <div className="stat-card"><div className="stat-icon">📐</div><div className="stat-info"><div className="stat-value">{Math.round(stats.totalArea)}</div><div className="stat-label">m² Afectați</div></div></div>
+                            <div className="stat-card"><div className="stat-icon">🎯</div><div className="stat-info"><div className="stat-value">{stats.avgConfidence}%</div><div className="stat-label">Confidență</div></div></div>
                         </div>
-                    )}
 
-                    <div className="content-wrapper">
-                        <div className="left-panel">
-                            <div className="map-section">
-                                <Map
-                                    leaks={leaks}
-                                    onLeakClick={setSelectedLeak}
-                                    center={getCityCoordinates(city)}
-                                />
-                            </div>
-
-                            <div className="charts-section">
-                                <LeakTrendChart data={historicalData} />
-                            </div>
+                        <div className="filter-bar">
+                            <button className={severityFilter === 'all' ? 'active' : ''} onClick={() => setSeverityFilter('all')}>Toate</button>
+                            <button className={severityFilter === 'high' ? 'active' : ''} onClick={() => setSeverityFilter('high')}>🔴 Urgență</button>
+                            <button className={severityFilter === 'medium' ? 'active' : ''} onClick={() => setSeverityFilter('medium')}>🟠 Risc Mediu</button>
+                            <button className={severityFilter === 'low' ? 'active' : ''} onClick={() => setSeverityFilter('low')}>🟡 Risc Scăzut</button>
                         </div>
 
-                        <div className="right-panel">
-                            <Statistics leaks={leaks} />
-                            <AlertsPanel alerts={leaks.filter(l => l.severity === 'high')} />
-                            <LeakPanel leaks={leaks} selectedLeak={selectedLeak} />
+                        <div className="spills-list">
+                            <h3>🛢️ Deversări petrol detectate</h3>
+                            {filteredSpills.map(spill => (
+                                <div key={spill.id} className={`spill-card ${spill.severity}`}>
+                                    <div className="spill-header"><div><div className="spill-title">🛢️ {spill.description}</div><div className="spill-badge">{spill.severity === 'high' ? 'URGENȚĂ' : spill.severity === 'medium' ? 'ATENȚIE' : 'MONITORIZARE'}</div></div><div className="spill-stats"><div className="spill-area">{spill.area_m2} m²</div><div className="spill-score">{(spill.score * 100).toFixed(0)}%</div></div></div>
+                                    <div className="spill-footer"><span>📍 {spill.lat}° N, {spill.lon}° E</span><span>🕐 {new Date(spill.timestamp).toLocaleString('ro-RO')}</span></div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                </div>
+                )}
 
-                <Footer version="1.0.0" />
-            </div>
-        </ErrorBoundary>
+                {/* Map Page */}
+                {activePage === 'map' && (
+                    <div className="page map-page">
+                        <div className="map-controls">
+                            <div className="control-group"><label>🎨 Strat satelit:</label><div className="layer-buttons"><button className={activeLayer === 'ndwi' ? 'active' : ''} onClick={() => setActiveLayer('ndwi')}>💧 NDWI</button><button className={activeLayer === 'ndmi' ? 'active' : ''} onClick={() => setActiveLayer('ndmi')}>🌿 NDMI</button><button className={activeLayer === 'truecolor' ? 'active' : ''} onClick={() => setActiveLayer('truecolor')}>🎨 True Color</button><button className={activeLayer === 'falsecolor' ? 'active' : ''} onClick={() => setActiveLayer('falsecolor')}>🔴 False Color</button></div></div>
+                            <div className="control-group"><label>📅 Perioadă:</label><div className="date-buttons"><button className={dateRange === 'today' ? 'active' : ''} onClick={() => setDateRange('today')}>Astăzi</button><button className={dateRange === 'last3' ? 'active' : ''} onClick={() => setDateRange('last3')}>3 zile</button><button className={dateRange === 'last7' ? 'active' : ''} onClick={() => setDateRange('last7')}>7 zile</button><button className={dateRange === 'last30' ? 'active' : ''} onClick={() => setDateRange('last30')}>30 zile</button></div></div>
+                            <div className="control-group"><label>☁️ Nori: {cloudCoverage}%</label><input type="range" min="0" max="100" value={cloudCoverage} onChange={(e) => setCloudCoverage(e.target.value)} className="cloud-slider" /></div>
+                        </div>
+                        <div className="map-container"><iframe title="Copernicus" src={getCopernicusUrl()} width="100%" height="100%" frameBorder="0" allowFullScreen /></div>
+                        <div className="map-info"><div className="info-item"><h4>📍 Naslavcea, RM</h4><p>{naslavceaCoords.lat}° N, {naslavceaCoords.lon}° E | Râul Nistru</p></div><div className="info-item"><h4>📊 Legendă</h4><div className="legend"><span className="legend-color water"></span>Apă/Poluare</div><div className="legend"><span className="legend-color oil"></span>Anomalie petrol</div></div><div className="info-item"><h4>🛰️ Sentinel-2</h4><p>Rezoluție 10m | L2A</p></div></div>
+                    </div>
+                )}
+
+                {/* Analytics Page */}
+                {activePage === 'analytics' && (
+                    <div className="page analytics-page">
+                        <div className="analytics-grid">
+                            <div className="analytics-card full-width"><h3>📈 Evoluție deversări</h3><div className="chart-container">{historicalData.map((d, i) => (<div key={i} className="chart-bar"><div className="chart-label">{d.date}</div><div className="bar-container"><div className="bar" style={{ height: `${d.spills * 30}px` }}></div></div><div className="chart-value">{d.spills}</div></div>))}</div></div>
+                            <div className="analytics-card"><h3>📊 Distribuție</h3><div className="pie-chart"><div className="pie-segment high" style={{ width: `${(stats.high / stats.total) * 100}%` }}>🔴</div><div className="pie-segment medium" style={{ width: `${(stats.medium / stats.total) * 100}%` }}>🟠</div><div className="pie-segment low" style={{ width: `${(stats.low / stats.total) * 100}%` }}>🟡</div></div><div className="pie-legend"><span>🔴 {stats.high}</span><span>🟠 {stats.medium}</span><span>🟡 {stats.low}</span></div></div>
+                            <div className="analytics-card"><h3>📐 Suprafață totală</h3><div className="stat-large">{Math.round(stats.totalArea)} m²</div><div className="trend positive">↑ 12% față de săptămâna trecută</div></div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Alerts Page */}
+                {activePage === 'alerts' && (
+                    <div className="page alerts-page">
+                        <div className="alerts-header"><h3>⚠️ Notificări</h3><div className="alert-count">{spills.filter(s => s.severity === 'high').length} urgente</div></div>
+                        <div className="alerts-list">
+                            {spills.filter(s => s.severity === 'high').map(alert => (<div key={alert.id} className="alert-card critical"><div className="alert-icon">🚨</div><div className="alert-content"><div className="alert-title">ALERTĂ CRITICĂ</div><div className="alert-desc">{alert.description}</div><div className="alert-details"><span>📍 {alert.lat}, {alert.lon}</span><span>📐 {alert.area_m2} m²</span></div></div><button className="alert-action">Intervenție →</button></div>))}
+                            {spills.filter(s => s.severity === 'medium').map(alert => (<div key={alert.id} className="alert-card warning"><div className="alert-icon">⚠️</div><div className="alert-content"><div className="alert-title">Alertă poluare</div><div className="alert-desc">{alert.description}</div><div className="alert-details"><span>📍 {alert.lat}, {alert.lon}</span><span>📐 {alert.area_m2} m²</span></div></div><button className="alert-action secondary">Monitorizare →</button></div>))}
+                        </div>
+                    </div>
+                )}
+            </main>
+        </div>
     );
 }
-
-const getCityCoordinates = (city) => {
-    const coords = {
-        'București': [44.4268, 26.1025],
-        'Cluj-Napoca': [46.7712, 23.6236],
-        'Timișoara': [45.7489, 21.2087],
-        'Iași': [47.1585, 27.6014],
-        'Constanța': [44.1598, 28.6348]
-    };
-    return coords[city] || coords['București'];
-};
 
 export default App;
