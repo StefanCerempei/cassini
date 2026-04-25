@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import MapPage from './pages/MapPage';
+import { ThemeProvider } from './context/ThemeContext';
 import './App.css';
 
-function App() {
+function AppContent() {
     const [spills, setSpills] = useState([]);
     const [loading, setLoading] = useState(true);
     const [lastUpdate, setLastUpdate] = useState(null);
@@ -9,9 +11,6 @@ function App() {
     const [activePage, setActivePage] = useState('dashboard');
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [activeLayer, setActiveLayer] = useState('ndwi');
-    const [dateRange, setDateRange] = useState('last7');
-    const [cloudCoverage, setCloudCoverage] = useState(30);
 
     const naslavceaCoords = {
         lat: 48.4714,
@@ -54,22 +53,7 @@ function App() {
         medium: spills.filter(s => s.severity === 'medium').length,
         low: spills.filter(s => s.severity === 'low').length,
         totalArea: spills.reduce((sum, s) => sum + s.area_m2, 0),
-        avgConfidence: Math.round(spills.reduce((sum, s) => sum + s.score, 0) / spills.length * 100)
-    };
-
-    const getCopernicusUrl = () => {
-        const layers = { ndwi: '7-NDWI', ndmi: '8-NDMI', truecolor: '1-TRUE-COLOR', falsecolor: '2-FALSE-COLOR' };
-        const getFromTime = () => {
-            const now = new Date();
-            switch(dateRange) {
-                case 'today': return now.toISOString();
-                case 'last3': now.setDate(now.getDate() - 3); return now.toISOString();
-                case 'last7': now.setDate(now.getDate() - 7); return now.toISOString();
-                case 'last30': now.setDate(now.getDate() - 30); return now.toISOString();
-                default: now.setDate(now.getDate() - 7); return now.toISOString();
-            }
-        };
-        return `https://browser.dataspace.copernicus.eu/?zoom=14&lat=${naslavceaCoords.lat}&lng=${naslavceaCoords.lon}&themeId=DEFAULT-THEME&visualizationUrl=U2FsdGVkX19cB3Lb7CbEdR361J6dvKjuG43fANN13y1ERehh0oJ0b7Sjh9sWISNgmy57tW%2BKTGoA8mJWtysQ2gvK%2F11yyLLGUMoiWGBOEE1c2KYM6Gk0ID7kMCDkfShj&datasetId=S2_L2A_CDAS&fromTime=${getFromTime()}&toTime=${new Date().toISOString()}&layerId=${layers[activeLayer]}&demSource3D=MAPZEN&cloudCoverage=${cloudCoverage}`;
+        avgConfidence: spills.length ? Math.round(spills.reduce((sum, s) => sum + s.score, 0) / spills.length * 100) : 0
     };
 
     const navItems = [
@@ -157,18 +141,8 @@ function App() {
                     </div>
                 )}
 
-                {/* Map Page */}
-                {activePage === 'map' && (
-                    <div className="page map-page">
-                        <div className="map-controls">
-                            <div className="control-group"><label>🎨 Strat satelit:</label><div className="layer-buttons"><button className={activeLayer === 'ndwi' ? 'active' : ''} onClick={() => setActiveLayer('ndwi')}>💧 NDWI</button><button className={activeLayer === 'ndmi' ? 'active' : ''} onClick={() => setActiveLayer('ndmi')}>🌿 NDMI</button><button className={activeLayer === 'truecolor' ? 'active' : ''} onClick={() => setActiveLayer('truecolor')}>🎨 True Color</button><button className={activeLayer === 'falsecolor' ? 'active' : ''} onClick={() => setActiveLayer('falsecolor')}>🔴 False Color</button></div></div>
-                            <div className="control-group"><label>📅 Perioadă:</label><div className="date-buttons"><button className={dateRange === 'today' ? 'active' : ''} onClick={() => setDateRange('today')}>Astăzi</button><button className={dateRange === 'last3' ? 'active' : ''} onClick={() => setDateRange('last3')}>3 zile</button><button className={dateRange === 'last7' ? 'active' : ''} onClick={() => setDateRange('last7')}>7 zile</button><button className={dateRange === 'last30' ? 'active' : ''} onClick={() => setDateRange('last30')}>30 zile</button></div></div>
-                            <div className="control-group"><label>☁️ Nori: {cloudCoverage}%</label><input type="range" min="0" max="100" value={cloudCoverage} onChange={(e) => setCloudCoverage(e.target.value)} className="cloud-slider" /></div>
-                        </div>
-                        <div className="map-container"><iframe title="Copernicus" src={getCopernicusUrl()} width="100%" height="100%" frameBorder="0" allowFullScreen /></div>
-                        <div className="map-info"><div className="info-item"><h4>📍 Naslavcea, RM</h4><p>{naslavceaCoords.lat}° N, {naslavceaCoords.lon}° E | Râul Nistru</p></div><div className="info-item"><h4>📊 Legendă</h4><div className="legend"><span className="legend-color water"></span>Apă/Poluare</div><div className="legend"><span className="legend-color oil"></span>Anomalie petrol</div></div><div className="info-item"><h4>🛰️ Sentinel-2</h4><p>Rezoluție 10m | L2A</p></div></div>
-                    </div>
-                )}
+                {/* Map Page - Using the imported MapPage component */}
+                {activePage === 'map' && <MapPage />}
 
                 {/* Analytics Page */}
                 {activePage === 'analytics' && (
@@ -196,4 +170,11 @@ function App() {
     );
 }
 
-export default App;
+// Wrap the app with ThemeProvider
+export default function App() {
+    return (
+        <ThemeProvider>
+            <AppContent />
+        </ThemeProvider>
+    );
+}

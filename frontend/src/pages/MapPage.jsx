@@ -1,70 +1,110 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../context/ThemeContext';
 import './Pages.css';
+
+const PIVOT_DATE = '2026-03-15';
+
+const datePresets = {
+    before: {
+        label: 'Înainte de 15.03.2026',
+        from: '2026-03-01T00:00:00.000Z',
+        to: '2026-03-14T23:59:59.999Z',
+    },
+    pivot: {
+        label: '15.03.2026',
+        from: '2026-03-15T00:00:00.000Z',
+        to: '2026-03-15T23:59:59.999Z',
+    },
+    after: {
+        label: 'După 15.03.2026',
+        from: '2026-03-16T00:00:00.000Z',
+        to: '2026-03-31T23:59:59.999Z',
+    },
+};
+
+const layers = {
+    ndwi: '7-NDWI',
+    ndmi: '8-NDMI',
+    truecolor: '1-TRUE-COLOR',
+    falsecolor: '2-FALSE-COLOR',
+};
+
+const processGraph = {
+    loadcollection: {
+        process_id: 'load_collection',
+        arguments: {
+            id: 'sentinel-2-l2a',
+            spatial_extent: {},
+            temporal_extent: null,
+            bands: ['B03', 'B08'],
+        },
+    },
+    save: {
+        process_id: 'save_result',
+        arguments: {
+            data: {
+                from_node: 'colorRamp',
+            },
+            format: 'PNG',
+        },
+        result: true,
+    },
+    index: {
+        process_id: 'ndwi',
+        arguments: {
+            data: {
+                from_node: 'loadcollection',
+            },
+            target_band: 'NDWI',
+            nir: 'B03',
+            red: 'B08',
+        },
+    },
+    colorRamp: {
+        process_id: 'color_ramp',
+        arguments: {
+            data: {
+                from_node: 'index',
+            },
+            minValue: -1,
+            maxValue: 1,
+            colorRamps: [
+                [-0.8, '0x008000'],
+                [0, '0xFFFFFF'],
+                [0.8, '0x0000CC'],
+            ],
+        },
+    },
+};
 
 const MapPage = () => {
     const { isDark } = useTheme();
     const [activeLayer, setActiveLayer] = useState('ndwi');
     const [cloudCoverage, setCloudCoverage] = useState(30);
-    const [dateRange, setDateRange] = useState('last7');
+    const [dateRange, setDateRange] = useState('pivot');
+    const [compareMode, setCompareMode] = useState(true);
 
-    // Coordonate Naslavcea, RM
-    const naslavceaCoords = { lat: 48.4714, lon: 27.5823 };
-
-    // Diferite layere pentru Copernicus
-    const layers = {
-        ndwi: '7-NDWI',      // Normalized Difference Water Index
-        ndmi: '8-NDMI',      // Normalized Difference Moisture Index
-        truecolor: '1-TRUE-COLOR',
-        falsecolor: '2-FALSE-COLOR',
-        moisture: '4-MOISTURE-INDEX',
-        urban: '5-URBAN-THERMAL'
-    };
-
-    // Generare URL Copernicus cu parametrii
-    const getCopernicusUrl = () => {
+    const monitoredCoords = { lat: 48.29002, lon: 28.0759 };
+    const getCopernicusUrl = (fromTime, toTime) => {
         const baseUrl = 'https://browser.dataspace.copernicus.eu/';
         const params = new URLSearchParams({
-            zoom: 14,
-            lat: naslavceaCoords.lat,
-            lng: naslavceaCoords.lon,
+            zoom: '12',
+            lat: `${monitoredCoords.lat}`,
+            lng: `${monitoredCoords.lon}`,
             themeId: 'DEFAULT-THEME',
-            visualizationUrl: 'U2FsdGVkX19cB3Lb7CbEdR361J6dvKjuG43fANN13y1ERehh0oJ0b7Sjh9sWISNgmy57tW%2BKTGoA8mJWtysQ2gvK%2F11yyLLGUMoiWGBOEE1c2KYM6Gk0ID7kMCDkfShj',
-            datasetId: 'S2_L2A_CDAS',
-            fromTime: getFromTime(),
-            toTime: getToTime(),
+            datasetId: 'S2L2ACDAS',
+            fromTime,
+            toTime,
             layerId: layers[activeLayer],
-            demSource3D: 'MAPZEN',
-            cloudCoverage: cloudCoverage,
+            cloudCoverage: `${cloudCoverage}`,
+            dateMode: 'SINGLE',
+            processGraph: JSON.stringify(processGraph),
         });
 
         return `${baseUrl}?${params.toString()}`;
     };
-
-    const getFromTime = () => {
-        const now = new Date();
-        switch(dateRange) {
-            case 'today':
-                return now.toISOString();
-            case 'last3':
-                now.setDate(now.getDate() - 3);
-                return now.toISOString();
-            case 'last7':
-                now.setDate(now.getDate() - 7);
-                return now.toISOString();
-            case 'last30':
-                now.setDate(now.getDate() - 30);
-                return now.toISOString();
-            default:
-                now.setDate(now.getDate() - 7);
-                return now.toISOString();
-        }
-    };
-
-    const getToTime = () => {
-        return new Date().toISOString();
-    };
+    const currentPreset = useMemo(() => datePresets[dateRange], [dateRange]);
 
     return (
         <motion.div
@@ -73,11 +113,11 @@ const MapPage = () => {
             className={`page-container ${isDark ? 'dark' : 'light'}`}
         >
             <div className="page-header">
-                <h1>🛰️ Hartă Satelitară Avansată</h1>
-                <p>Monitorizare Copernicus Sentinel-2 | Naslavcea, Râul Nistru</p>
+                <h1>🛰️ Hartă Satelitară Copernicus (înainte / după 15 martie 2026)</h1>
+                <p>
+                    Sentinel-2 L2A, coordonate 48.29002 N / 28.0759 E, cu acces direct la imagini înainte și după data de {PIVOT_DATE}
+                </p>
             </div>
-
-            {/* Panou control layere */}
             <div className="map-controls-panel">
                 <div className="control-group">
                     <label>🎨 Strat satelit:</label>
@@ -100,10 +140,9 @@ const MapPage = () => {
                 <div className="control-group">
                     <label>📅 Perioadă:</label>
                     <div className="date-buttons">
-                        <button className={dateRange === 'today' ? 'active' : ''} onClick={() => setDateRange('today')}>Astăzi</button>
-                        <button className={dateRange === 'last3' ? 'active' : ''} onClick={() => setDateRange('last3')}>Ultimele 3 zile</button>
-                        <button className={dateRange === 'last7' ? 'active' : ''} onClick={() => setDateRange('last7')}>Ultimele 7 zile</button>
-                        <button className={dateRange === 'last30' ? 'active' : ''} onClick={() => setDateRange('last30')}>Ultimele 30 zile</button>
+                        <button className={dateRange === 'before' ? 'active' : ''} onClick={() => setDateRange('before')}>Înainte</button>
+                        <button className={dateRange === 'pivot' ? 'active' : ''} onClick={() => setDateRange('pivot')}>15 martie 2026</button>
+                        <button className={dateRange === 'after' ? 'active' : ''} onClick={() => setDateRange('after')}>După</button>
                     </div>
                 </div>
 
@@ -119,56 +158,73 @@ const MapPage = () => {
                     />
                     <span className="cloud-value">{cloudCoverage}%</span>
                 </div>
+                <div className="control-group">
+                    <label>🪞 Comparație:</label>
+                    <button
+                        className={`toggle-button ${compareMode ? 'active' : ''}`}
+                        onClick={() => setCompareMode((value) => !value)}
+                    >
+                        {compareMode ? 'Comparare ON' : 'Comparare OFF'}
+                    </button>
+                </div>
             </div>
+            {compareMode ? (
+                <div className="map-compare-grid">
+                    <div className="map-compare-card">
+                        <h4>{datePresets.before.label}</h4>
+                        <iframe
+                            title="Copernicus Browser - before 2026-03-15"
+                            src={getCopernicusUrl(datePresets.before.from, datePresets.before.to)}
+                            frameBorder="0"
+                            allowFullScreen
+                            className="copernicus-iframe"
+                        />
+                    </div>
+                    <div className="map-compare-card">
+                        <h4>{datePresets.after.label}</h4>
+                        <iframe
+                            title="Copernicus Browser - after 2026-03-15"
+                            src={getCopernicusUrl(datePresets.after.from, datePresets.after.to)}
+                            frameBorder="0"
+                            allowFullScreen
+                            className="copernicus-iframe"
+                        />
+                    </div>
+                </div>
+            ) : (
+                <div className="map-container-copernicus">
+                    <iframe
+                        title="Copernicus Browser"
+                        src={getCopernicusUrl(currentPreset.from, currentPreset.to)}
+                        frameBorder="0"
+                        allowFullScreen
+                        className="copernicus-iframe"
+                    />
+                </div>
+            )}
 
-            {/* Harta Copernicus */}
-            <div className="map-container-copernicus">
-                <iframe
-                    title="Copernicus Browser - Naslavcea"
-                    src={getCopernicusUrl()}
-                    width="100%"
-                    height="100%"
-                    frameBorder="0"
-                    allowFullScreen
-                    className="copernicus-iframe"
-                />
-            </div>
-
-            {/* Legendă și informații */}
             <div className="map-info-panel">
                 <div className="info-section">
                     <h4>📍 Locație monitorizată</h4>
-                    <p>Naslavcea, Republica Moldova (48.4714° N, 27.5823° E)</p>
-                    <p className="location-desc">Râul Nistru - Zonă strategică pentru detectare poluare</p>
+                    <p>48.29002° N, 28.0759° E</p>
+                    <p className="location-desc">Comparație înainte și după 15 martie 2026</p>
                 </div>
 
                 <div className="info-section">
-                    <h4>📊 Indicii spectrali</h4>
-                    <div className="legend-items">
-                        <div className="legend-legend">
-                            <span className="legend-color water"></span>
-                            <span>NDWI > 0.5 - Apă/Poluare</span>
-                        </div>
-                        <div className="legend-legend">
-                            <span className="legend-color oil"></span>
-                            <span>Anomalie spectrală - Posibil petrol</span>
-                        </div>
-                        <div className="legend-legend">
-                            <span className="legend-color vegetation"></span>
-                            <span>Vegetație sănătoasă</span>
-                        </div>
-                    </div>
+                    <h4>📊 Interval selectat</h4>
+                    <p>{currentPreset.label}</p>
+                    <p>De la: {new Date(currentPreset.from).toLocaleString('ro-RO')}</p>
+                    <p>Până la: {new Date(currentPreset.to).toLocaleString('ro-RO')}</p>
                 </div>
 
                 <div className="info-section">
                     <h4>🛰️ Sursă date</h4>
-                    <p>ESA Copernicus Sentinel-2 Level-2A</p>
-                    <p>Rezoluție: 10m (RGB, NIR, SWIR)</p>
-                    <p>Ultima actualizare: {new Date().toLocaleString('ro-RO')}</p>
+                    <p>Copernicus Data Space Browser</p>
+                    <p>Dataset: Sentinel-2 L2A (S2L2ACDAS)</p>
+                    <p>Ultima actualizare UI: {new Date().toLocaleString('ro-RO')}</p>
                 </div>
             </div>
         </motion.div>
     );
 };
-
 export default MapPage;
