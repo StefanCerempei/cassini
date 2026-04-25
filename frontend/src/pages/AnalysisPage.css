@@ -163,6 +163,16 @@
 }
 .btn-new:hover { background: rgba(255,255,255,0.18); }
 
+.done-notice {
+  font-size: 13px;
+  color: #4caf50;
+  background: rgba(76,175,80,0.12);
+  border: 1px solid rgba(76,175,80,0.3);
+  border-radius: 20px;
+  padding: 8px 16px;
+}
+.done-notice strong { color: #ff6b35; }
+
 .error-msg {
   background: rgba(230,57,70,0.15);
   border: 1px solid #e63946;
