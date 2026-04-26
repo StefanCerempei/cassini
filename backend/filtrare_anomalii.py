@@ -5,7 +5,7 @@ from scipy import ndimage
 # ---------------------------------------------------------------------------
 # Praguri NDWI
 # ---------------------------------------------------------------------------
-PRAG_APA_CURATA   = 0.2   # NDWI > 0.2  → pixel cu apă (corp de apă deschis)
+PRAG_APA_CURATA   = 0.1   # Prag mai robust pentru ape tulburi/înguste în zone urbane
 PRAG_APA_DEGRADATA = -0.1  # Dacă în trecut era apă (> PRAG_APA_CURATA) dar
                             # acum a scăzut sub acest prag → posibil poluată /
                             # acoperită cu alge / deversare industrială
@@ -119,7 +119,7 @@ def detecteaza_poluare_comparativa(matrice_referinta, matrice_curenta):
             "procent_din_apa_originala":     procent_din_apa_originala,
             "intensitate_medie_degradare":   intensitate_medie_degradare,
             "intensitate_maxima_degradare":  intensitate_max_degradare,
-            "punct_critic_relativ":          list(idx_critic),
+            "punct_critic_relativ":          [int(idx_critic[0]), int(idx_critic[1])],
         },
         "status_alerta": status,
     }
@@ -141,12 +141,25 @@ def _aliniaza_matrici(m1, m2):
 
 def _curata_zgomot(masca):
     """
-    Binary Opening 3×3: elimină pixelii izolați (artefacte de senzor).
+    Elimină doar componentele foarte mici, fără să șteargă cursurile de apă înguste.
     """
-    structura = np.array([[0, 1, 0],
-                           [1, 1, 1],
-                           [0, 1, 0]])
-    return ndimage.binary_opening(masca, structure=structura).astype(np.int8)
+    masca = masca.astype(bool)
+    etichete, nr_comp = ndimage.label(masca)
+    if nr_comp == 0:
+        return masca.astype(np.int8)
+
+    marimi = np.bincount(etichete.ravel())
+    min_pixeli_componenta = 2
+    pastreaza = marimi >= min_pixeli_componenta
+    pastreaza[0] = False  # fundalul
+
+    filtrata = pastreaza[etichete].astype(np.int8)
+
+    # Fallback de siguranță: dacă filtrarea a șters tot, păstrăm masca brută
+    if int(np.sum(filtrata)) == 0 and int(np.sum(masca)) > 0:
+        return masca.astype(np.int8)
+
+    return filtrata
 
 
 def _la_procent(numarator, numitor):

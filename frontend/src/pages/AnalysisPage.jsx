@@ -131,7 +131,7 @@ const AnalysisPage = () => {
     evtSourceRef.current?.close();
 
     try {
-      const res = await fetch('http://localhost:5000/api/detect', {
+      const res = await fetch('http://localhost:5000/api/detect_async', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lat: latV, lng: lngV, an_referinta: refY, an_curent: curY }),
