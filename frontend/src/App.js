@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import MapPage from './pages/MapPage';
+import AnalysisPage from './pages/AnalysisPage';
 import { ThemeProvider } from './context/ThemeContext';
 import './App.css';
 import './pages/AnalysisPage.css';
@@ -39,46 +39,21 @@ const LOCATIONS = {
     },
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const getStatusColor = (status = '') => {
-    if (status.includes('DEZASTRU')) return '#e63946';
-    if (status.includes('SEVERĂ'))   return '#ff4444';
-    if (status.includes('MODERATĂ')) return '#ff9800';
-    if (status.includes('ANOMALIE')) return '#ffcc00';
-    return '#4caf50';
+const severityDetails = {
+    high: { label: 'URGENȚĂ', icon: '🚨', cardClass: 'critical' },
+    medium: { label: 'ATENȚIE', icon: '⚠️', cardClass: 'warning' },
+    low: { label: 'MONITORIZARE', icon: '🟡', cardClass: 'info' },
 };
 
-const StatResultCard = ({ icon, label, value, sub, color }) => (
-    <div className="stat-result-card" style={{ '--card-color': color }}>
-        <div className="src-icon">{icon}</div>
-        <div className="src-value">{value}</div>
-        <div className="src-label">{label}</div>
-        <div className="src-sub">{sub}</div>
-    </div>
-);
+const statusToAlertClass = (status = '') => {
+    if (status.includes('DEZASTRU') || status.includes('SEVERĂ')) return 'critical';
+    if (status.includes('MODERATĂ') || status.includes('ANOMALIE')) return 'warning';
+    return 'info';
+};
 
-const DegradationBar = ({ pct }) => {
-    const clamped = Math.min(100, Math.max(0, pct));
-    const color = clamped > 50 ? '#e63946' : clamped > 20 ? '#ff4444' : clamped > 5 ? '#ff9800' : '#4caf50';
-    return (
-        <div className="deg-bar-wrapper">
-            <div className="deg-bar-label">
-                Progres degradare: <strong style={{ color }}>{clamped.toFixed(1)}%</strong>
-            </div>
-            <div className="deg-bar-track">
-                <motion.div
-                    className="deg-bar-fill"
-                    style={{ background: color }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${clamped}%` }}
-                    transition={{ duration: 1, ease: 'easeOut' }}
-                />
-            </div>
-            <div className="deg-bar-ticks">
-                <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
-            </div>
-        </div>
-    );
+const formatDateTime = (value) => {
+    if (!value) return '-';
+    return new Date(value).toLocaleString('ro-RO');
 };
 
 // ─── Main app ─────────────────────────────────────────────────────────────────
@@ -91,16 +66,8 @@ function AppContent() {
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [selectedLocation, setSelectedLocation] = useState('naslavcea');
-    const [analysisResult, setAnalysisResult] = useState(null);
-
-    const historicalData = [
-        { date: '01 Apr', spills: 2, area: 450 },
-        { date: '05 Apr', spills: 3, area: 680 },
-        { date: '10 Apr', spills: 1, area: 230 },
-        { date: '15 Apr', spills: 4, area: 890 },
-        { date: '20 Apr', spills: 2, area: 510 },
-        { date: '25 Apr', spills: 3, area: 720 },
-    ];
+    const [alertsTab, setAlertsTab] = useState('general');
+    const [recentAnalyses, setRecentAnalyses] = useState([]);
 
     const loadSpillsForLocation = (locationKey) => {
         setLoading(true);
@@ -125,6 +92,16 @@ function AppContent() {
         loadSpillsForLocation(locationKey);
     };
 
+    const handleAnalysisComplete = (result) => {
+        if (!result) return;
+        const entry = {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            timestamp: new Date().toISOString(),
+            result,
+        };
+        setRecentAnalyses(prev => [entry, ...prev].slice(0, 12));
+    };
+
     const filteredSpills = severityFilter === 'all'
         ? spills
         : spills.filter(s => s.severity === severityFilter);
@@ -140,11 +117,13 @@ function AppContent() {
             : 0,
     };
 
+    const activeOperationalAlerts = spills.filter(s => s.severity === 'high' || s.severity === 'medium');
+
     const navItems = [
         { id: 'dashboard', icon: '📊', label: 'Dashboard',     desc: 'Prezentare generală' },
-        { id: 'map',       icon: '🗺️', label: 'Hartă Satelit', desc: 'Analiză NDWI Copernicus' },
-        { id: 'analytics', icon: '📈', label: 'Analytics',     desc: 'Rezultate și statistici' },
-        { id: 'alerts',    icon: '⚠️', label: 'Alerts',        desc: 'Notificări active' },
+        { id: 'map',       icon: '🗺️', label: 'Hartă Satelit', desc: 'Doar hartă + filtre' },
+        { id: 'analytics', icon: '📈', label: 'Analytics',     desc: 'Analiză satelit + statistici' },
+        { id: 'alerts',    icon: '⚠️', label: 'Alerts',        desc: 'Generale + analizate recent' },
     ];
 
     if (loading) {
@@ -251,7 +230,7 @@ function AppContent() {
                                         <div>
                                             <div className="spill-title">🛢️ {spill.description}</div>
                                             <div className="spill-badge">
-                                                {spill.severity === 'high' ? 'URGENȚĂ' : spill.severity === 'medium' ? 'ATENȚIE' : 'MONITORIZARE'}
+                                                {severityDetails[spill.severity]?.label || 'ALERTĂ'}
                                             </div>
                                         </div>
                                         <div className="spill-stats">
@@ -269,97 +248,58 @@ function AppContent() {
                     </div>
                 )}
 
-                {/* ── Map page ── */}
+                {/* ── Map page (doar satelit + filtre) ── */}
                 {activePage === 'map' && (
-                    <MapPage onAnalysisComplete={setAnalysisResult} />
+                    <MapPage mapOnly />
                 )}
 
-                {/* ── Analytics ── */}
+                {/* ── Analytics (analiză + statistici operaționale) ── */}
                 {activePage === 'analytics' && (
-                    <div className="page analytics-page">
-                        <div className="analytics-grid">
-                            <div className="analytics-card full-width">
-                                <h3>📈 Evoluție deversări</h3>
-                                <div className="chart-container">
-                                    {historicalData.map((d, i) => (
-                                        <div key={i} className="chart-bar">
-                                            <div className="chart-label">{d.date}</div>
-                                            <div className="bar-container">
-                                                <div className="bar" style={{ height: `${d.spills * 30}px` }}></div>
+                    <div className="analytics-workspace">
+                        <AnalysisPage onAnalysisComplete={handleAnalysisComplete} />
+
+                        <div className="page analytics-ops-section">
+                            <div className="analytics-ops-header">
+                                <h3>📊 Date statistice operaționale</h3>
+                                <p>Datele de alertare active mutate din secțiunea Alerts.</p>
+                            </div>
+
+                            <div className="stats-grid">
+                                <div className="stat-card high"><div className="stat-icon">🚨</div><div className="stat-info"><div className="stat-value">{stats.high}</div><div className="stat-label">Alerte critice</div></div></div>
+                                <div className="stat-card medium"><div className="stat-icon">⚠️</div><div className="stat-info"><div className="stat-value">{stats.medium}</div><div className="stat-label">Alerte moderate</div></div></div>
+                                <div className="stat-card low"><div className="stat-icon">🟡</div><div className="stat-info"><div className="stat-value">{stats.low}</div><div className="stat-label">Monitorizare</div></div></div>
+                                <div className="stat-card"><div className="stat-icon">📐</div><div className="stat-info"><div className="stat-value">{Math.round(stats.totalArea)}</div><div className="stat-label">m² afectați</div></div></div>
+                                <div className="stat-card"><div className="stat-icon">🎯</div><div className="stat-info"><div className="stat-value">{stats.avgConfidence}%</div><div className="stat-label">Confidență medie</div></div></div>
+                                <div className="stat-card"><div className="stat-icon">🛰️</div><div className="stat-info"><div className="stat-value">{recentAnalyses.length}</div><div className="stat-label">Analize recente</div></div></div>
+                            </div>
+
+                            <div className="analytics-alerts-embedded">
+                                <h3>⚠️ Alerte active (monitorizare curentă)</h3>
+                                <div className="alerts-list">
+                                    {activeOperationalAlerts.length === 0 && (
+                                        <div className="empty-card">Nu există alerte active pentru locația selectată.</div>
+                                    )}
+                                    {activeOperationalAlerts.map(alert => {
+                                        const meta = severityDetails[alert.severity] || severityDetails.low;
+                                        return (
+                                            <div key={`analytics-${alert.id}`} className={`alert-card ${meta.cardClass}`}>
+                                                <div className="alert-icon">{meta.icon}</div>
+                                                <div className="alert-content">
+                                                    <div className="alert-title">{meta.label}</div>
+                                                    <div className="alert-desc">{alert.description}</div>
+                                                    <div className="alert-details">
+                                                        <span>📍 {alert.lat}, {alert.lon}</span>
+                                                        <span>📐 {alert.area_m2} m²</span>
+                                                        <span>🎯 {(alert.score * 100).toFixed(0)}%</span>
+                                                    </div>
+                                                </div>
+                                                <button className="alert-action secondary" onClick={() => setActivePage('alerts')}>Vezi Alerts →</button>
                                             </div>
-                                            <div className="chart-value">{d.spills}</div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
-                            </div>
-                            <div className="analytics-card">
-                                <h3>📊 Distribuție</h3>
-                                <div className="pie-chart">
-                                    <div className="pie-segment high"   style={{ width: `${(stats.high   / stats.total) * 100}%` }}>🔴</div>
-                                    <div className="pie-segment medium" style={{ width: `${(stats.medium / stats.total) * 100}%` }}>🟠</div>
-                                    <div className="pie-segment low"    style={{ width: `${(stats.low    / stats.total) * 100}%` }}>🟡</div>
-                                </div>
-                                <div className="pie-legend">
-                                    <span>🔴 {stats.high}</span>
-                                    <span>🟠 {stats.medium}</span>
-                                    <span>🟡 {stats.low}</span>
-                                </div>
-                            </div>
-                            <div className="analytics-card">
-                                <h3>📐 Suprafață totală</h3>
-                                <div className="stat-large">{Math.round(stats.totalArea)} m²</div>
-                                <div className="trend positive">↑ 12% față de săptămâna trecută</div>
                             </div>
                         </div>
-
-                        {analysisResult ? (
-                            <div className={`analysis-page ${isDarkMode ? 'dark' : 'light'}`} style={{ padding: 0, minHeight: 'auto', animation: 'none' }}>
-                                <div className="results-panel" style={{ marginTop: 24 }}>
-                                    <div className="results-header">
-                                        <h2>📋 Raport Satelitar CASSINI — Ultima Analiză</h2>
-                                    </div>
-                                    <div className="verdict-card" style={{ '--status-color': getStatusColor(analysisResult.status_alerta) }}>
-                                        <div className="verdict-icon">🚨</div>
-                                        <div className="verdict-text">{analysisResult.status_alerta}</div>
-                                    </div>
-                                    <div className="meta-row">
-                                        <div className="meta-item">
-                                            <span className="meta-icon">📍</span>
-                                            <span className="meta-label">Coordonate</span>
-                                            <span className="meta-value">{analysisResult.meta?.lat}, {analysisResult.meta?.lng}</span>
-                                        </div>
-                                        <div className="meta-item">
-                                            <span className="meta-icon">📅</span>
-                                            <span className="meta-label">Referință → Curent</span>
-                                            <span className="meta-value">{analysisResult.meta?.an_referinta} → {analysisResult.meta?.an_curent}</span>
-                                        </div>
-                                    </div>
-                                    <div className="stats-results">
-                                        <StatResultCard icon="🌊" label="Apă referință"              value={`${analysisResult.statistici?.procent_apa_referinta ?? 0}%`}       sub="din arie totală"            color="#0055AA" />
-                                        <StatResultCard icon="🌊" label="Apă curentă"                value={`${analysisResult.statistici?.procent_apa_curenta ?? 0}%`}          sub="din arie totală"            color="#4488cc" />
-                                        <StatResultCard icon="⚠️" label="Suprafață degradată"        value={`${analysisResult.statistici?.procent_suprafata_degradata ?? 0}%`}  sub="din arie totală"            color="#ff9800" />
-                                        <StatResultCard icon="📉" label="Degradare din apa inițială" value={`${analysisResult.statistici?.procent_din_apa_originala ?? 0}%`}    sub="procent critic"             color={getStatusColor(analysisResult.status_alerta)} />
-                                        <StatResultCard icon="🔬" label="Intensitate medie"          value={analysisResult.statistici?.intensitate_medie_degradare ?? 0}        sub="NDWI mediu zonă degradată"  color="#9c27b0" />
-                                        <StatResultCard icon="🔴" label="Intensitate maximă"         value={analysisResult.statistici?.intensitate_maxima_degradare ?? 0}       sub="NDWI minim detectat"        color="#e63946" />
-                                    </div>
-                                    <div className="pixel-row">
-                                        <div className="pixel-chip">🟦 Pixeli apă referință: <strong>{analysisResult.statistici?.pixeli_apa_referinta ?? 0}</strong></div>
-                                        <div className="pixel-chip">🟩 Pixeli apă curentă: <strong>{analysisResult.statistici?.pixeli_apa_curenta ?? 0}</strong></div>
-                                        <div className="pixel-chip">🟥 Pixeli degradați: <strong>{analysisResult.statistici?.pixeli_degradati ?? 0}</strong></div>
-                                    </div>
-                                    <DegradationBar pct={analysisResult.statistici?.procent_din_apa_originala ?? 0} />
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="no-analysis-placeholder">
-                                <div className="placeholder-icon">🛰️</div>
-                                <h3>Nicio analiză satelitară disponibilă</h3>
-                                <p>Mergi la <strong>Hartă Satelit</strong> și lansează o analiză NDWI pentru a vedea rezultatele detaliate aici.</p>
-                                <button className="btn-go-map" onClick={() => setActivePage('map')}>
-                                    🗺️ Mergi la Hartă Satelit
-                                </button>
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -370,36 +310,70 @@ function AppContent() {
                             <h3>⚠️ Notificări</h3>
                             <div className="alert-count">{spills.filter(s => s.severity === 'high').length} urgente</div>
                         </div>
-                        <div className="alerts-list">
-                            {spills.filter(s => s.severity === 'high').map(alert => (
-                                <div key={alert.id} className="alert-card critical">
-                                    <div className="alert-icon">🚨</div>
-                                    <div className="alert-content">
-                                        <div className="alert-title">ALERTĂ CRITICĂ</div>
-                                        <div className="alert-desc">{alert.description}</div>
-                                        <div className="alert-details">
-                                            <span>📍 {alert.lat}, {alert.lon}</span>
-                                            <span>📐 {alert.area_m2} m²</span>
-                                        </div>
-                                    </div>
-                                    <button className="alert-action">Intervenție →</button>
-                                </div>
-                            ))}
-                            {spills.filter(s => s.severity === 'medium').map(alert => (
-                                <div key={alert.id} className="alert-card warning">
-                                    <div className="alert-icon">⚠️</div>
-                                    <div className="alert-content">
-                                        <div className="alert-title">Alertă poluare</div>
-                                        <div className="alert-desc">{alert.description}</div>
-                                        <div className="alert-details">
-                                            <span>📍 {alert.lat}, {alert.lon}</span>
-                                            <span>📐 {alert.area_m2} m²</span>
-                                        </div>
-                                    </div>
-                                    <button className="alert-action secondary">Monitorizare →</button>
-                                </div>
-                            ))}
+
+                        <div className="alerts-tabs">
+                            <button
+                                className={alertsTab === 'general' ? 'active' : ''}
+                                onClick={() => setAlertsTab('general')}
+                            >
+                                Alerte generale
+                            </button>
+                            <button
+                                className={alertsTab === 'recent' ? 'active' : ''}
+                                onClick={() => setAlertsTab('recent')}
+                            >
+                                Analizate recent
+                            </button>
                         </div>
+
+                        {alertsTab === 'general' && (
+                            <div className="alerts-list">
+                                {spills.map(alert => {
+                                    const meta = severityDetails[alert.severity] || severityDetails.low;
+                                    return (
+                                        <div key={`general-${alert.id}`} className={`alert-card ${meta.cardClass}`}>
+                                            <div className="alert-icon">{meta.icon}</div>
+                                            <div className="alert-content">
+                                                <div className="alert-title">{meta.label}</div>
+                                                <div className="alert-desc">{alert.description}</div>
+                                                <div className="alert-details">
+                                                    <span>📍 {alert.lat}, {alert.lon}</span>
+                                                    <span>📐 {alert.area_m2} m²</span>
+                                                    <span>🕐 {formatDateTime(alert.timestamp)}</span>
+                                                </div>
+                                            </div>
+                                            <button className="alert-action secondary">Monitorizare →</button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {alertsTab === 'recent' && (
+                            <div className="alerts-list">
+                                {recentAnalyses.length === 0 && (
+                                    <div className="empty-card">
+                                        Nu există analize recente încă. Rulează o analiză în tab-ul <strong>Analytics</strong>.
+                                    </div>
+                                )}
+                                {recentAnalyses.map(entry => (
+                                    <div key={entry.id} className={`alert-card ${statusToAlertClass(entry.result?.status_alerta)}`}>
+                                        <div className="alert-icon">🛰️</div>
+                                        <div className="alert-content">
+                                            <div className="alert-title">Analiză NDWI recentă</div>
+                                            <div className="alert-desc">{entry.result?.status_alerta || 'Fără verdict'}</div>
+                                            <div className="alert-details">
+                                                <span>📍 {entry.result?.meta?.lat}, {entry.result?.meta?.lng}</span>
+                                                <span>📅 {entry.result?.meta?.an_referinta} → {entry.result?.meta?.an_curent}</span>
+                                                <span>📉 {entry.result?.statistici?.procent_din_apa_originala ?? 0}% degradare</span>
+                                                <span>🕐 {formatDateTime(entry.timestamp)}</span>
+                                            </div>
+                                        </div>
+                                        <button className="alert-action" onClick={() => setActivePage('analytics')}>Vezi în Analytics →</button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </main>

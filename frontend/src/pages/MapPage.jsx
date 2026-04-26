@@ -49,7 +49,7 @@ const getLogClass = (line) => {
 };
 
 // ─── MapPage ──────────────────────────────────────────────────────────────────
-const MapPage = ({ onAnalysisComplete }) => {
+const MapPage = ({ onAnalysisComplete, mapOnly = false }) => {
     const { isDark } = useTheme();
 
     const [lat, setLat] = useState('45.75');
@@ -81,7 +81,7 @@ const MapPage = ({ onAnalysisComplete }) => {
         setCurUrl(buildCopernicusUrl({ lat: latV, lng: lngV, fromTime: curFrom, toTime: curTo, layerKey: lKey, cloudCoverage: cloud }));
     }, []);
 
-    const startAnalysis = async () => {
+    const validateInputs = () => {
         const latV = parseFloat(lat);
         const lngV = parseFloat(lng);
         const refY = parseInt(anRef);
@@ -89,26 +89,53 @@ const MapPage = ({ onAnalysisComplete }) => {
 
         if (isNaN(latV) || isNaN(lngV) || isNaN(refY) || isNaN(curY)) {
             setErrorMsg('Completați toate câmpurile cu valori valide.');
-            return;
+            return null;
         }
         if (refY >= curY) {
             setErrorMsg('Anul de referință trebuie să fie mai mic decât anul curent.');
+            return null;
+        }
+
+        return { latV, lngV, refY, curY };
+    };
+
+    const applyFilters = () => {
+        const parsed = validateInputs();
+        if (!parsed) return;
+
+        setErrorMsg('');
+        setMapsVisible(true);
+        buildMapUrls(parsed.latV, parsed.lngV, parsed.refY, parsed.curY, layerKey, cloudCoverage);
+    };
+
+    useEffect(() => {
+        if (!mapOnly) return;
+        setMapsVisible(true);
+        buildMapUrls(45.75, 21.22, 2020, 2026, 'ndwi', 20);
+    }, [mapOnly, buildMapUrls]);
+
+    const startAnalysis = async () => {
+        if (mapOnly) {
+            applyFilters();
             return;
         }
+
+        const parsed = validateInputs();
+        if (!parsed) return;
 
         setStatus('running');
         setLogs(['⏳ Pregătire analiză...', '🛰️ Conectare la Copernicus DataSpace...']);
         setErrorMsg('');
         setMapsVisible(true);
-        buildMapUrls(latV, lngV, refY, curY, layerKey, cloudCoverage);
+        buildMapUrls(parsed.latV, parsed.lngV, parsed.refY, parsed.curY, layerKey, cloudCoverage);
 
         try {
             setLogs(prev => [...prev, '🧪 Procesare imagini Sentinel-2 NDWI...']);
 
-            const res = await fetch('http://localhost:5000/api/detect', {
+            const res = await fetch('/api/detect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ lat: latV, lng: lngV, an_referinta: refY, an_curent: curY }),
+                body: JSON.stringify({ lat: parsed.latV, lng: parsed.lngV, an_referinta: parsed.refY, an_curent: parsed.curY }),
             });
 
             const data = await res.json();
@@ -139,8 +166,12 @@ const MapPage = ({ onAnalysisComplete }) => {
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`analysis-page ${isDark ? 'dark' : 'light'}`}>
             <div className="analysis-header">
-                <h1>🗺️ Hartă Satelit & Analiză NDWI</h1>
-                <p>Vizualizare și comparare imagini Sentinel-2 prin analiza indexului de apă NDWI</p>
+                <h1>{mapOnly ? '🗺️ Hartă Satelit' : '🗺️ Hartă Satelit & Analiză NDWI'}</h1>
+                <p>
+                    {mapOnly
+                        ? 'Viewer satelitar Sentinel-2 cu filtre pe coordonate, ani și tip de hartă NDWI.'
+                        : 'Vizualizare și comparare imagini Sentinel-2 prin analiza indexului de apă NDWI'}
+                </p>
             </div>
 
             {/* ── Control panel ── */}
@@ -186,19 +217,25 @@ const MapPage = ({ onAnalysisComplete }) => {
                 </div>
 
                 <div className="action-row">
-                    {(status === 'idle' || status === 'error') && (
-                        <button className="btn-analyze" onClick={startAnalysis}>🚀 Lansează Analiza</button>
-                    )}
-                    {status === 'running' && (
-                        <button className="btn-stop" onClick={reset}>⏹ Oprește</button>
-                    )}
-                    {status === 'done' && (
-                        <button className="btn-new" onClick={reset}>🔄 Analiză nouă</button>
-                    )}
-                    {status === 'done' && (
-                        <span className="done-notice">
-                            ✅ Rezultatele sunt disponibile în secțiunea <strong>Analytics</strong>
-                        </span>
+                    {mapOnly ? (
+                        <button className="btn-analyze" onClick={applyFilters}>🛰️ Aplică filtre</button>
+                    ) : (
+                        <>
+                            {(status === 'idle' || status === 'error') && (
+                                <button className="btn-analyze" onClick={startAnalysis}>🚀 Lansează Analiza</button>
+                            )}
+                            {status === 'running' && (
+                                <button className="btn-stop" onClick={reset}>⏹ Oprește</button>
+                            )}
+                            {status === 'done' && (
+                                <button className="btn-new" onClick={reset}>🔄 Analiză nouă</button>
+                            )}
+                            {status === 'done' && (
+                                <span className="done-notice">
+                                    ✅ Rezultatele sunt disponibile în secțiunea <strong>Analytics</strong>
+                                </span>
+                            )}
+                        </>
                     )}
                     {errorMsg && <div className="error-msg">⚠️ {errorMsg}</div>}
                 </div>
@@ -230,26 +267,28 @@ const MapPage = ({ onAnalysisComplete }) => {
             </AnimatePresence>
 
             {/* ── Live logs ── */}
-            <AnimatePresence>
-                {(status === 'running' || logs.length > 0) && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="logs-panel"
-                    >
-                        <div className="logs-header">
-                            <span>📡 Log server</span>
-                            {status === 'running' && <span className="pulse-dot" />}
-                            {status === 'done' && <span className="done-tag">✅ Finalizat</span>}
-                        </div>
-                        <div className="logs-body">
-                            {logs.map((line, i) => (
-                                <div key={i} className={`log-line ${getLogClass(line)}`}>{line}</div>
-                            ))}
-                            <div ref={logsEndRef} />
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {!mapOnly && (
+                <AnimatePresence>
+                    {(status === 'running' || logs.length > 0) && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                            className="logs-panel"
+                        >
+                            <div className="logs-header">
+                                <span>📡 Log server</span>
+                                {status === 'running' && <span className="pulse-dot" />}
+                                {status === 'done' && <span className="done-tag">✅ Finalizat</span>}
+                            </div>
+                            <div className="logs-body">
+                                {logs.map((line, i) => (
+                                    <div key={i} className={`log-line ${getLogClass(line)}`}>{line}</div>
+                                ))}
+                                <div ref={logsEndRef} />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            )}
         </motion.div>
     );
 };
