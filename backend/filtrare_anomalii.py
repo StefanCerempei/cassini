@@ -5,10 +5,11 @@ from scipy import ndimage
 # ---------------------------------------------------------------------------
 # Praguri NDWI
 # ---------------------------------------------------------------------------
-PRAG_APA_CURATA   = 0.1   # Prag mai robust pentru ape tulburi/înguste în zone urbane
-PRAG_APA_DEGRADATA = -0.1  # Dacă în trecut era apă (> PRAG_APA_CURATA) dar
-                            # acum a scăzut sub acest prag → posibil poluată /
-                            # acoperită cu alge / deversare industrială
+PERCENTILA_APA_REFERINTA = 90
+PRAG_APA_CURATA_MIN = -0.25
+PRAG_APA_CURATA_MAX = 0.15
+DELTA_DEGRADARE_NDWI = 0.08
+PRAG_APA_DEGRADATA = -0.35
 
 
 def detecteaza_poluare_comparativa(matrice_referinta, matrice_curenta):
@@ -39,9 +40,12 @@ def detecteaza_poluare_comparativa(matrice_referinta, matrice_curenta):
         matrice_referinta, matrice_curenta
     )
 
+    prag_apa_curata = _calculeaza_prag_apa_dinamic(matrice_referinta)
+    print(f"  🎚️ Prag apă dinamic (referință): {prag_apa_curata:.3f}")
+
     # --- 1. Mascăm zona cu apă din fiecare an ---
-    masca_apa_referinta = (matrice_referinta > PRAG_APA_CURATA).astype(np.int8)
-    masca_apa_curenta   = (matrice_curenta   > PRAG_APA_CURATA).astype(np.int8)
+    masca_apa_referinta = (matrice_referinta > prag_apa_curata).astype(np.int8)
+    masca_apa_curenta   = (matrice_curenta   > prag_apa_curata).astype(np.int8)
 
     # Curățăm zgomotul (reflexii izolate de acoperișuri, mașini etc.)
     masca_apa_referinta = _curata_zgomot(masca_apa_referinta)
@@ -51,10 +55,14 @@ def detecteaza_poluare_comparativa(matrice_referinta, matrice_curenta):
     pixeli_apa_curenta   = int(np.sum(masca_apa_curenta))
 
     # --- 2. Pixeli care ERAU apă dar NU mai sunt → degradare / poluare ---
-    # Condiție: era apă (referință > prag) ȘI acum NDWI a scăzut semnificativ
+    # Condiție: era apă (referință > prag dinamic) ȘI acum NDWI a scăzut
+    # semnificativ față de pragul de apă.
     masca_degradare = (
         (masca_apa_referinta == 1) &
-        (matrice_curenta < PRAG_APA_DEGRADATA)
+        (
+            (matrice_curenta < (prag_apa_curata - DELTA_DEGRADARE_NDWI)) |
+            (matrice_curenta < PRAG_APA_DEGRADATA)
+        )
     ).astype(np.int8)
     masca_degradare = _curata_zgomot(masca_degradare)
     pixeli_degradati = int(np.sum(masca_degradare))
@@ -137,6 +145,16 @@ def _aliniaza_matrici(m1, m2):
     rows = min(m1.shape[0], m2.shape[0])
     cols = min(m1.shape[1], m2.shape[1])
     return m1[:rows, :cols], m2[:rows, :cols]
+
+
+def _calculeaza_prag_apa_dinamic(matrice_referinta):
+    """
+    Estimează un prag NDWI pentru apă din distribuția scenei de referință.
+    Folosește percentila superioară, apoi limitează intervalul pentru stabilitate.
+    """
+    prag_brut = float(np.percentile(matrice_referinta, PERCENTILA_APA_REFERINTA))
+    prag_limitat = float(np.clip(prag_brut, PRAG_APA_CURATA_MIN, PRAG_APA_CURATA_MAX))
+    return prag_limitat
 
 
 def _curata_zgomot(masca):

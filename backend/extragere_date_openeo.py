@@ -26,8 +26,8 @@ def obtine_ndwi_openeo(lat, lng, an, nume_fisier_output=None):
     connection = openeo.connect("openeofed.dataspace.copernicus.eu")
     connection.authenticate_oidc()
 
-    # --- 2. Definire zonă de interes (bounding box 0.05° în jurul punctului) ---
-    delta = 0.005
+    # --- 2. Definire zonă de interes (bounding box 0.02° în jurul punctului) ---
+    delta = 0.02
     spatial_extent = {
         "west":  lng - delta,
         "east":  lng + delta,
