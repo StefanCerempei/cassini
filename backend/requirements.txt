@@ -1,0 +1,5 @@
+Flask>=3.0,<4
+Flask-Cors>=4.0,<7
+numpy>=2.2,<2.4
+opencv-python-headless>=4.12,<5
+Pillow>=10.4,<13
